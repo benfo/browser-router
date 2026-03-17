@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
@@ -220,7 +221,7 @@ func browsersCmd() *cobra.Command {
 		Use:   "browsers",
 		Short: "Manage browser definitions",
 	}
-	cmd.AddCommand(browsersListCmd(), browsersAddCmd(), browsersSetDefaultCmd(), browsersProfilesCmd(), browsersDetectCmd())
+	cmd.AddCommand(browsersListCmd(), browsersSetDefaultCmd(), browsersProfilesCmd(), browsersDetectCmd())
 	return cmd
 }
 
@@ -246,55 +247,6 @@ func browsersListCmd() *cobra.Command {
 	}
 }
 
-func browsersAddCmd() *cobra.Command {
-	var name, windows, darwin, linux string
-
-	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add or update a browser definition",
-		Example: `  browser-router browsers add --name chrome               (auto-fill from catalog)
-  browser-router browsers add --name brave --windows "C:\...\brave.exe"`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if name == "" {
-				return fmt.Errorf("--name is required")
-			}
-
-			// If no paths were provided, try to fill from the known catalog
-			if windows == "" && darwin == "" && linux == "" {
-				if kb, ok := findKnownBrowser(name); ok {
-					windows, darwin, linux = kb.ExeWin, kb.ExeMac, kb.ExeLin
-					fmt.Printf("Using catalog paths for %q.\n", kb.Label)
-				} else {
-					return fmt.Errorf("no paths provided and %q is not in the catalog — use --windows/--mac/--linux", name)
-				}
-			}
-
-			cfg, err := loadConfig()
-			if err != nil {
-				return err
-			}
-
-			cfg.Browsers[name] = BrowserDef{
-				Windows: windows,
-				Darwin:  darwin,
-				Linux:   linux,
-			}
-
-			if err := saveConfig(cfg); err != nil {
-				return err
-			}
-
-			fmt.Printf("Browser %q saved.\n", name)
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&name, "name", "", "Browser identifier (required)")
-	cmd.Flags().StringVar(&windows, "windows", "", "Executable path on Windows")
-	cmd.Flags().StringVar(&darwin, "mac", "", "Executable path on macOS")
-	cmd.Flags().StringVar(&linux, "linux", "", "Executable path on Linux")
-	return cmd
-}
 
 func browsersSetDefaultCmd() *cobra.Command {
 	var profile string
@@ -348,29 +300,46 @@ func browsersProfilesCmd() *cobra.Command {
 }
 
 func browsersDetectCmd() *cobra.Command {
-	var addToConfig bool
+	var addNames []string
 
 	cmd := &cobra.Command{
 		Use:   "detect",
 		Short: "Scan for installed browsers and their profiles",
+		Example: `  browser-router browsers detect
+  browser-router browsers detect --add chrome
+  browser-router browsers detect --add chrome,edge
+  browser-router browsers detect --add all`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
 
+			addSet := map[string]bool{}
+			addAll := false
+			for _, n := range addNames {
+				if n == "all" {
+					addAll = true
+				} else {
+					addSet[strings.ToLower(n)] = true
+				}
+			}
+
 			anyFound := false
+			changed := false
+
 			for _, kb := range knownBrowsers {
 				if !kb.isInstalled() {
 					continue
 				}
 				anyFound = true
 
-				inConfig := ""
-				if _, exists := cfg.Browsers[kb.ConfigKey]; !exists {
-					inConfig = "  [not in config]"
+				_, inConfig := cfg.Browsers[kb.ConfigKey]
+				status := ""
+				if !inConfig {
+					status = "  [not in config]"
 				}
-				fmt.Printf("%s%s\n", kb.Label, inConfig)
+				fmt.Printf("%s%s\n", kb.Label, status)
 				fmt.Printf("  exe: %s\n", kb.exe())
 
 				profiles, err := kb.profiles()
@@ -380,18 +349,20 @@ func browsersDetectCmd() *cobra.Command {
 					fmt.Printf("  profiles:\n")
 					for _, p := range profiles {
 						fmt.Printf("    %-20s → %s\n", p.DirName, p.DisplayName)
+						fmt.Printf("      add rule: browser-router rules add --match \"<pattern>\" --browser %s --profile \"%s\"\n",
+							kb.ConfigKey, p.DirName)
 					}
 				}
 
-				if addToConfig {
-					if _, exists := cfg.Browsers[kb.ConfigKey]; !exists {
-						cfg.Browsers[kb.ConfigKey] = BrowserDef{
-							Windows: kb.ExeWin,
-							Darwin:  kb.ExeMac,
-							Linux:   kb.ExeLin,
-						}
-						fmt.Printf("  → added to config\n")
+				shouldAdd := !inConfig && (addAll || addSet[kb.ConfigKey])
+				if shouldAdd {
+					cfg.Browsers[kb.ConfigKey] = BrowserDef{
+						Windows: kb.ExeWin,
+						Darwin:  kb.ExeMac,
+						Linux:   kb.ExeLin,
 					}
+					fmt.Printf("  → added to config\n")
+					changed = true
 				}
 				fmt.Println()
 			}
@@ -401,19 +372,19 @@ func browsersDetectCmd() *cobra.Command {
 				return nil
 			}
 
-			if addToConfig {
+			if changed {
 				if err := saveConfig(cfg); err != nil {
 					return err
 				}
 				fmt.Println("Config saved.")
-			} else {
-				fmt.Println("Tip: run with --add to add any missing browsers to your config.")
+			} else if len(addNames) == 0 {
+				fmt.Println("Tip: use --add <name> to add a browser, or --add all for all missing ones.")
 			}
 			return nil
 		},
 	}
 
-	cmd.Flags().BoolVar(&addToConfig, "add", false, "Add detected browsers to config if not already present")
+	cmd.Flags().StringSliceVar(&addNames, "add", nil, "Browser(s) to add to config: a name, comma-separated names, or 'all'")
 	return cmd
 }
 
