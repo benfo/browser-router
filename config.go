@@ -1,37 +1,36 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
 
-	"github.com/BurntSushi/toml"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Default  BrowserTarget         `toml:"default"`
-	Rules    []Rule                `toml:"rules"`
-	Browsers map[string]BrowserDef `toml:"browsers"`
+	Default  BrowserTarget         `yaml:"default"`
+	Rules    []Rule                `yaml:"rules"`
+	Browsers map[string]BrowserDef `yaml:"browsers"`
 }
 
 type Rule struct {
-	Description string `toml:"description,omitempty"`
-	Match       string `toml:"match"`
-	Browser     string `toml:"browser"`
-	Profile     string `toml:"profile,omitempty"`
+	Description string `yaml:"description,omitempty"`
+	Match       string `yaml:"match"`
+	Browser     string `yaml:"browser"`
+	Profile     string `yaml:"profile,omitempty"`
 }
 
 type BrowserTarget struct {
-	Browser string `toml:"browser"`
-	Profile string `toml:"profile,omitempty"`
+	Browser string `yaml:"browser"`
+	Profile string `yaml:"profile,omitempty"`
 }
 
 type BrowserDef struct {
-	Windows string   `toml:"windows"`
-	Darwin  string   `toml:"darwin"`
-	Linux   string   `toml:"linux"`
-	Args    []string `toml:"args,omitempty"`
+	Windows string   `yaml:"windows"`
+	Darwin  string   `yaml:"darwin"`
+	Linux   string   `yaml:"linux"`
+	Args    []string `yaml:"args,omitempty"`
 }
 
 func (b BrowserDef) Executable() string {
@@ -50,7 +49,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "browser-router", "config.toml"), nil
+	return filepath.Join(dir, "browser-router", "config.yaml"), nil
 }
 
 func loadConfig() (*Config, error) {
@@ -68,7 +67,7 @@ func loadConfig() (*Config, error) {
 	}
 
 	var cfg Config
-	if err := toml.Unmarshal(data, &cfg); err != nil {
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
@@ -84,12 +83,12 @@ func saveConfig(cfg *Config) error {
 		return err
 	}
 
-	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(cfg); err != nil {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, buf.Bytes(), 0644)
+	return os.WriteFile(path, data, 0644)
 }
 
 func defaultConfig() *Config {

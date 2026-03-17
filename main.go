@@ -3,15 +3,14 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -428,9 +427,8 @@ func configCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				var buf bytes.Buffer
-				toml.NewEncoder(&buf).Encode(cfg)
-				fmt.Print(buf.String())
+				data, _ := yaml.Marshal(cfg)
+				fmt.Print(string(data))
 				return nil
 			},
 		},
