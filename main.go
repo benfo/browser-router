@@ -343,6 +343,24 @@ func configCmd() *cobra.Command {
 				return nil
 			},
 		},
+		&cobra.Command{
+			Use:   "edit",
+			Short: "Open the config file in your default editor",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				path, err := configPath()
+				if err != nil {
+					return err
+				}
+				// Ensure the file exists before opening
+				if _, err := os.Stat(path); os.IsNotExist(err) {
+					cfg := defaultConfig()
+					if err := saveConfig(cfg); err != nil {
+						return err
+					}
+				}
+				return openInEditor(path)
+			},
+		},
 	)
 
 	return cmd
