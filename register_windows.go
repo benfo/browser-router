@@ -16,66 +16,81 @@ func register() error {
 		return err
 	}
 
-	type kv struct{ key, value, data string }
+	openCmd := fmt.Sprintf(`"%s" open "%%1"`, exe)
 
-	entries := []struct {
-		path string
-		kvs  []kv
-	}{
-		{
-			`Software\Classes\BrowserRouter`,
-			[]kv{
-				{"", "", "Browser Router"},
-				{"", "URL Protocol", ""},
-			},
+	// String values: path → map of name→data
+	stringKeys := map[string]map[string]string{
+		// ProgID — what the URL associations point to
+		`Software\Classes\BrowserRouter`: {
+			"":            "Browser Router",
+			"URL Protocol": "",
 		},
-		{
-			`Software\Classes\BrowserRouter\DefaultIcon`,
-			[]kv{{"", "", exe + ",0"}},
+		`Software\Classes\BrowserRouter\DefaultIcon`: {
+			"": exe + ",0",
 		},
-		{
-			`Software\Classes\BrowserRouter\shell\open\command`,
-			[]kv{{"", "", fmt.Sprintf(`"%s" open "%%1"`, exe)}},
+		`Software\Classes\BrowserRouter\shell\open\command`: {
+			"": openCmd,
 		},
-		{
-			`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities`,
-			[]kv{
-				{"", "ApplicationName", "Browser Router"},
-				{"", "ApplicationDescription", "Routes URLs to different browsers based on rules"},
-			},
+
+		// StartMenuInternet registration — required for Default Apps UI
+		`Software\Clients\StartMenuInternet\BrowserRouter`: {
+			"": "Browser Router",
 		},
-		{
-			`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities\URLAssociations`,
-			[]kv{
-				{"", "http", "BrowserRouter"},
-				{"", "https", "BrowserRouter"},
-			},
+		`Software\Clients\StartMenuInternet\BrowserRouter\DefaultIcon`: {
+			"": exe + ",0",
 		},
-		{
-			`Software\RegisteredApplications`,
-			[]kv{{"", "BrowserRouter", `Software\Clients\StartMenuInternet\BrowserRouter\Capabilities`}},
+		`Software\Clients\StartMenuInternet\BrowserRouter\shell\open\command`: {
+			"": openCmd,
+		},
+		`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities`: {
+			"ApplicationName":        "Browser Router",
+			"ApplicationDescription": "Routes URLs to different browsers based on rules",
+			"ApplicationIcon":        exe + ",0",
+		},
+		`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities\URLAssociations`: {
+			"http":  "BrowserRouter",
+			"https": "BrowserRouter",
+		},
+		`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities\FileAssociations`: {
+			".htm":  "BrowserRouter",
+			".html": "BrowserRouter",
+		},
+
+		// RegisteredApplications — links name to Capabilities
+		`Software\RegisteredApplications`: {
+			"BrowserRouter": `Software\Clients\StartMenuInternet\BrowserRouter\Capabilities`,
 		},
 	}
 
-	for _, e := range entries {
-		k, _, err := registry.CreateKey(registry.CURRENT_USER, e.path, registry.ALL_ACCESS)
+	for path, values := range stringKeys {
+		k, _, err := registry.CreateKey(registry.CURRENT_USER, path, registry.ALL_ACCESS)
 		if err != nil {
-			return fmt.Errorf("create key %s: %w", e.path, err)
+			return fmt.Errorf("create key %s: %w", path, err)
 		}
-		for _, kv := range e.kvs {
-			k.SetStringValue(kv.key, kv.data)
+		for name, data := range values {
+			k.SetStringValue(name, data)
 		}
 		k.Close()
 	}
 
+	// InstallInfo requires a DWORD, so handle separately
+	installInfo, _, err := registry.CreateKey(registry.CURRENT_USER,
+		`Software\Clients\StartMenuInternet\BrowserRouter\InstallInfo`, registry.ALL_ACCESS)
+	if err != nil {
+		return fmt.Errorf("create InstallInfo key: %w", err)
+	}
+	installInfo.SetDWordValue("IconsVisible", 1)
+	installInfo.Close()
+
 	fmt.Println("Registered successfully.")
-	fmt.Println("Opening Windows Settings > Default Apps — set 'Browser Router' as your default browser there.")
+	fmt.Printf("Executable: %s\n\n", exe)
+	fmt.Println("Opening Windows Settings > Default Apps.")
+	fmt.Println("Search for 'Browser Router' and set it as your default browser.")
 	exec.Command("cmd", "/c", "start", "ms-settings:defaultapps").Start()
 	return nil
 }
 
 func unregister() error {
-	// Delete leaves first, then parents
 	leafFirst := []string{
 		`Software\Classes\BrowserRouter\shell\open\command`,
 		`Software\Classes\BrowserRouter\shell\open`,
@@ -83,7 +98,13 @@ func unregister() error {
 		`Software\Classes\BrowserRouter\DefaultIcon`,
 		`Software\Classes\BrowserRouter`,
 		`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities\URLAssociations`,
+		`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities\FileAssociations`,
 		`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities`,
+		`Software\Clients\StartMenuInternet\BrowserRouter\InstallInfo`,
+		`Software\Clients\StartMenuInternet\BrowserRouter\DefaultIcon`,
+		`Software\Clients\StartMenuInternet\BrowserRouter\shell\open\command`,
+		`Software\Clients\StartMenuInternet\BrowserRouter\shell\open`,
+		`Software\Clients\StartMenuInternet\BrowserRouter\shell`,
 		`Software\Clients\StartMenuInternet\BrowserRouter`,
 	}
 
