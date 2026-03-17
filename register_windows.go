@@ -55,11 +55,6 @@ func register() error {
 			".htm":  "BrowserRouter",
 			".html": "BrowserRouter",
 		},
-
-		// RegisteredApplications — links name to Capabilities
-		`Software\RegisteredApplications`: {
-			"BrowserRouter": `Software\Clients\StartMenuInternet\BrowserRouter\Capabilities`,
-		},
 	}
 
 	for path, values := range stringKeys {
@@ -110,12 +105,6 @@ func unregister() error {
 
 	for _, path := range leafFirst {
 		registry.DeleteKey(registry.CURRENT_USER, path)
-	}
-
-	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\RegisteredApplications`, registry.ALL_ACCESS)
-	if err == nil {
-		k.DeleteValue("BrowserRouter")
-		k.Close()
 	}
 
 	fmt.Println("Unregistered successfully.")
