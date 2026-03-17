@@ -139,6 +139,13 @@ func rulesAddCmd() *cobra.Command {
 				return err
 			}
 
+			for _, r := range cfg.Rules {
+				if r.Match == match && r.Browser == browser && r.Profile == profile {
+					fmt.Println("Rule already exists.")
+					return nil
+				}
+			}
+
 			rule := Rule{
 				Description: description,
 				Match:       match,

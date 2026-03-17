@@ -173,6 +173,14 @@ func createRuleInteractive(e monitorEvent, inputCh <-chan string) {
 		return
 	}
 
+	for _, r := range cfg.Rules {
+		if r.Match == pattern && r.Browser == browserInput && r.Profile == profileInput {
+			fmt.Println("Rule already exists.")
+			fmt.Println(strings.Repeat("─", 60))
+			return
+		}
+	}
+
 	// Prepend so the new rule takes priority over existing ones
 	rule := Rule{Match: pattern, Browser: browserInput, Profile: profileInput}
 	cfg.Rules = append([]Rule{rule}, cfg.Rules...)
