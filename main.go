@@ -220,7 +220,7 @@ func browsersCmd() *cobra.Command {
 		Use:   "browsers",
 		Short: "Manage browser definitions",
 	}
-	cmd.AddCommand(browsersListCmd(), browsersAddCmd(), browsersSetDefaultCmd())
+	cmd.AddCommand(browsersListCmd(), browsersAddCmd(), browsersSetDefaultCmd(), browsersProfilesCmd(), browsersDetectCmd())
 	return cmd
 }
 
@@ -307,6 +307,102 @@ func browsersSetDefaultCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&profile, "profile", "", "Default profile")
+	return cmd
+}
+
+func browsersProfilesCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "profiles <browser>",
+		Short:   "List detected profiles for a browser",
+		Example: `  browser-router browsers profiles chrome`,
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			kb, ok := findKnownBrowser(args[0])
+			if !ok {
+				return fmt.Errorf("unknown browser %q — supported: chrome, edge, brave, vivaldi, firefox", args[0])
+			}
+
+			profiles, err := kb.profiles()
+			if err != nil {
+				return fmt.Errorf("could not read profiles: %w", err)
+			}
+
+			fmt.Printf("%s profiles:\n", kb.Label)
+			for _, p := range profiles {
+				fmt.Printf("  %-20s → %s\n", p.DirName, p.DisplayName)
+			}
+			return nil
+		},
+	}
+}
+
+func browsersDetectCmd() *cobra.Command {
+	var addToConfig bool
+
+	cmd := &cobra.Command{
+		Use:   "detect",
+		Short: "Scan for installed browsers and their profiles",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+
+			anyFound := false
+			for _, kb := range knownBrowsers {
+				if !kb.isInstalled() {
+					continue
+				}
+				anyFound = true
+
+				inConfig := ""
+				if _, exists := cfg.Browsers[kb.ConfigKey]; !exists {
+					inConfig = "  [not in config]"
+				}
+				fmt.Printf("%s%s\n", kb.Label, inConfig)
+				fmt.Printf("  exe: %s\n", kb.exe())
+
+				profiles, err := kb.profiles()
+				if err != nil {
+					fmt.Printf("  profiles: (could not read — %v)\n", err)
+				} else {
+					fmt.Printf("  profiles:\n")
+					for _, p := range profiles {
+						fmt.Printf("    %-20s → %s\n", p.DirName, p.DisplayName)
+					}
+				}
+
+				if addToConfig {
+					if _, exists := cfg.Browsers[kb.ConfigKey]; !exists {
+						cfg.Browsers[kb.ConfigKey] = BrowserDef{
+							Windows: kb.ExeWin,
+							Darwin:  kb.ExeMac,
+							Linux:   kb.ExeLin,
+						}
+						fmt.Printf("  → added to config\n")
+					}
+				}
+				fmt.Println()
+			}
+
+			if !anyFound {
+				fmt.Println("No known browsers detected.")
+				return nil
+			}
+
+			if addToConfig {
+				if err := saveConfig(cfg); err != nil {
+					return err
+				}
+				fmt.Println("Config saved.")
+			} else {
+				fmt.Println("Tip: run with --add to add any missing browsers to your config.")
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&addToConfig, "add", false, "Add detected browsers to config if not already present")
 	return cmd
 }
 
