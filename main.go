@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
@@ -24,6 +25,7 @@ func main() {
 		rulesCmd(),
 		browsersCmd(),
 		configCmd(),
+		monitorCmd(),
 	)
 
 	if err := root.Execute(); err != nil {
@@ -43,7 +45,14 @@ func openCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			target := route(args[0], cfg)
+			target, rule := route(args[0], cfg)
+			broadcastToMonitor(monitorEvent{
+				Time:    time.Now(),
+				URL:     args[0],
+				Browser: target.Browser,
+				Profile: target.Profile,
+				Rule:    rule,
+			})
 			return launch(target, args[0], cfg)
 		},
 	}
@@ -210,6 +219,18 @@ func rulesTestCmd() *cobra.Command {
 			}
 			testURL(args[0], cfg)
 			return nil
+		},
+	}
+}
+
+// ── monitor ───────────────────────────────────────────────────────────────────
+
+func monitorCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "monitor",
+		Short: "Live view of URLs being opened, with interactive rule creation",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runMonitor()
 		},
 	}
 }
