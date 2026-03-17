@@ -1,3 +1,5 @@
+//go:build !handler
+
 package main
 
 import (

@@ -6,17 +6,30 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"golang.org/x/sys/windows/registry"
 )
 
 func register() error {
-	exe, err := os.Executable()
+	self, err := os.Executable()
 	if err != nil {
 		return err
 	}
 
-	openCmd := fmt.Sprintf(`"%s" open "%%1"`, exe)
+	// The URL handler is a separate windowsgui binary (no console flash).
+	// It must live in the same directory as browser-router.exe.
+	handler := filepath.Join(filepath.Dir(self), "browser-router-open.exe")
+	if _, err := os.Stat(handler); os.IsNotExist(err) {
+		return fmt.Errorf(
+			"browser-router-open.exe not found in %s\n"+
+				"Build both binaries with: .\\build.ps1",
+			filepath.Dir(self),
+		)
+	}
+
+	// The handler takes the URL as its sole argument.
+	openCmd := fmt.Sprintf(`"%s" "%%1"`, handler)
 
 	// String values: path → map of name→data
 	stringKeys := map[string]map[string]string{
@@ -26,7 +39,7 @@ func register() error {
 			"URL Protocol": "",
 		},
 		`Software\Classes\BrowserRouter\DefaultIcon`: {
-			"": exe + ",0",
+			"": handler + ",0",
 		},
 		`Software\Classes\BrowserRouter\shell\open\command`: {
 			"": openCmd,
@@ -37,7 +50,7 @@ func register() error {
 			"": "Browser Router",
 		},
 		`Software\Clients\StartMenuInternet\BrowserRouter\DefaultIcon`: {
-			"": exe + ",0",
+			"": handler + ",0",
 		},
 		`Software\Clients\StartMenuInternet\BrowserRouter\shell\open\command`: {
 			"": openCmd,
@@ -45,7 +58,7 @@ func register() error {
 		`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities`: {
 			"ApplicationName":        "Browser Router",
 			"ApplicationDescription": "Routes URLs to different browsers based on rules",
-			"ApplicationIcon":        exe + ",0",
+			"ApplicationIcon":        handler + ",0",
 		},
 		`Software\Clients\StartMenuInternet\BrowserRouter\Capabilities\URLAssociations`: {
 			"http":  "BrowserRouter",
@@ -78,7 +91,7 @@ func register() error {
 	installInfo.Close()
 
 	fmt.Println("Registered successfully.")
-	fmt.Printf("Executable: %s\n\n", exe)
+	fmt.Printf("Handler:    %s\n\n", handler)
 	fmt.Println("Opening Windows Settings > Default Apps.")
 	fmt.Println("Search for 'Browser Router' and set it as your default browser.")
 	exec.Command("cmd", "/c", "start", "ms-settings:defaultapps").Start()
