@@ -1,35 +1,37 @@
 package main
 
 import (
-	"encoding/json"
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/BurntSushi/toml"
 )
 
 type Config struct {
-	Default  BrowserTarget         `json:"default"`
-	Rules    []Rule                `json:"rules"`
-	Browsers map[string]BrowserDef `json:"browsers"`
+	Default  BrowserTarget         `toml:"default"`
+	Rules    []Rule                `toml:"rules"`
+	Browsers map[string]BrowserDef `toml:"browsers"`
 }
 
 type Rule struct {
-	Description string `json:"description,omitempty"`
-	Match       string `json:"match"`
-	Browser     string `json:"browser"`
-	Profile     string `json:"profile,omitempty"`
+	Description string `toml:"description,omitempty"`
+	Match       string `toml:"match"`
+	Browser     string `toml:"browser"`
+	Profile     string `toml:"profile,omitempty"`
 }
 
 type BrowserTarget struct {
-	Browser string `json:"browser"`
-	Profile string `json:"profile,omitempty"`
+	Browser string `toml:"browser"`
+	Profile string `toml:"profile,omitempty"`
 }
 
 type BrowserDef struct {
-	Windows string   `json:"windows"`
-	Darwin  string   `json:"darwin"`
-	Linux   string   `json:"linux"`
-	Args    []string `json:"args,omitempty"`
+	Windows string   `toml:"windows"`
+	Darwin  string   `toml:"darwin"`
+	Linux   string   `toml:"linux"`
+	Args    []string `toml:"args,omitempty"`
 }
 
 func (b BrowserDef) Executable() string {
@@ -48,7 +50,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "browser-router", "config.json"), nil
+	return filepath.Join(dir, "browser-router", "config.toml"), nil
 }
 
 func loadConfig() (*Config, error) {
@@ -66,7 +68,7 @@ func loadConfig() (*Config, error) {
 	}
 
 	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
@@ -82,12 +84,12 @@ func saveConfig(cfg *Config) error {
 		return err
 	}
 
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(cfg); err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, buf.Bytes(), 0644)
 }
 
 func defaultConfig() *Config {

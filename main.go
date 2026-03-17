@@ -1,11 +1,12 @@
 package main
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"os"
 	"strconv"
 
+	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 )
 
@@ -326,8 +327,9 @@ func configCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				data, _ := json.MarshalIndent(cfg, "", "  ")
-				fmt.Println(string(data))
+				var buf bytes.Buffer
+				toml.NewEncoder(&buf).Encode(cfg)
+				fmt.Print(buf.String())
 				return nil
 			},
 		},
