@@ -252,10 +252,21 @@ func browsersAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add or update a browser definition",
-		Example: `  browser-router browsers add --name brave --windows "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"`,
+		Example: `  browser-router browsers add --name chrome               (auto-fill from catalog)
+  browser-router browsers add --name brave --windows "C:\...\brave.exe"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if name == "" {
 				return fmt.Errorf("--name is required")
+			}
+
+			// If no paths were provided, try to fill from the known catalog
+			if windows == "" && darwin == "" && linux == "" {
+				if kb, ok := findKnownBrowser(name); ok {
+					windows, darwin, linux = kb.ExeWin, kb.ExeMac, kb.ExeLin
+					fmt.Printf("Using catalog paths for %q.\n", kb.Label)
+				} else {
+					return fmt.Errorf("no paths provided and %q is not in the catalog — use --windows/--mac/--linux", name)
+				}
 			}
 
 			cfg, err := loadConfig()
