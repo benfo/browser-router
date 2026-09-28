@@ -8,8 +8,22 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
+
+const (
+	capabilitiesPath = `Software\Clients\StartMenuInternet\BrowserRouter\Capabilities`
+	registeredApps   = `Software\RegisteredApplications`
+	appName          = "Browser Router"
+)
+
+// notifyAssocChanged tells the shell that file/URL associations changed so
+// Default Apps picks up the registration without a sign-out.
+func notifyAssocChanged() {
+	const shcneAssocChanged = 0x08000000
+	windows.NewLazySystemDLL("shell32.dll").NewProc("SHChangeNotify").Call(shcneAssocChanged, 0, 0, 0)
+}
 
 func register() error {
 	self, err := os.Executable()
@@ -90,6 +104,20 @@ func register() error {
 	installInfo.SetDWordValue("IconsVisible", 1)
 	installInfo.Close()
 
+	// RegisteredApplications is what Default Apps enumerates; without it the
+	// app never appears in the list.
+	apps, _, err := registry.CreateKey(registry.CURRENT_USER, registeredApps, registry.SET_VALUE)
+	if err != nil {
+		return fmt.Errorf("create RegisteredApplications key: %w", err)
+	}
+	err = apps.SetStringValue(appName, capabilitiesPath)
+	apps.Close()
+	if err != nil {
+		return fmt.Errorf("set RegisteredApplications value: %w", err)
+	}
+
+	notifyAssocChanged()
+
 	fmt.Println("Registered successfully.")
 	fmt.Printf("Handler:    %s\n\n", handler)
 	fmt.Println("Opening Windows Settings > Default Apps.")
@@ -119,6 +147,13 @@ func unregister() error {
 	for _, path := range leafFirst {
 		registry.DeleteKey(registry.CURRENT_USER, path)
 	}
+
+	if apps, err := registry.OpenKey(registry.CURRENT_USER, registeredApps, registry.SET_VALUE); err == nil {
+		apps.DeleteValue(appName)
+		apps.Close()
+	}
+
+	notifyAssocChanged()
 
 	fmt.Println("Unregistered successfully.")
 	return nil
