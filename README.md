@@ -46,3 +46,10 @@ Rules are checked top to bottom, and the first match wins. Anything that doesn't
 ```sh
 git tag v0.1.0 && git push origin v0.1.0
 ```
+
+## Roadmap
+
+- [ ] Resolve rule profiles by display name (e.g. `profile: Work`) via Chrome's `Local State`, since folder names like `Profile 1` differ per machine. Exact folder-name match wins.
+- [ ] Config path override (`BROWSER_ROUTER_CONFIG` or `config path --set`) so the config can live in a synced folder.
+- [ ] UI for rule management (Wails, Fyne, Tauri or embedded webview), once the CLI is stable.
+- [ ] System tray icon.
