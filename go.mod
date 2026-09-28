@@ -1,4 +1,4 @@
-module github.com/browser-router/browser-router
+module github.com/benfo/browser-router
 
 go 1.22
 
